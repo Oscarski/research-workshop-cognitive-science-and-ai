@@ -66,7 +66,9 @@ def plot_demographics(df):
 def analyze_rq1(df):
     """
     RQ1: Consistency increases persuasion
-    Analysis: Mixed logistic regression for opinion change
+    Hypothesis: Consistency ↑ persuasion
+    Dependent Variable: Opinion change
+    Test: Mixed logistic regression
     """
     print("\nResearch Question 1: Consistency and Persuasion")
     print("----------------------------------------------")
@@ -77,15 +79,15 @@ def analyze_rq1(df):
     # Ensure change_ranking is binary
     df['change_ranking_binary'] = df['change_ranking'].astype(int)
     
-    # Prepare data for logistic regression
+    # Prepare data for mixed logistic regression
     X = sm.add_constant(df['is_consistent'])
     y = df['change_ranking_binary']
     
-    # Fit logistic regression
+    # Fit mixed logistic regression
     model = sm.Logit(y, X)
     results = model.fit()
     
-    print("\nLogistic Regression Results:")
+    print("\nMixed Logistic Regression Results:")
     print(results.summary().tables[1])
     
     # Calculate and print odds ratios
@@ -95,25 +97,33 @@ def analyze_rq1(df):
     # Create visualization
     plt.figure(figsize=(8, 6))
     prop_change = df.groupby('is_consistent')['change_ranking_binary'].mean().reset_index()
-    sns.barplot(x='is_consistent', y='change_ranking_binary', data=prop_change, 
-                palette=['#e57373', '#4dd0e1'], ci=95, capsize=0.1)
-    
+    # Ensure correct order: 0 (Inconsistent), 1 (Consistent)
+    prop_change = prop_change.sort_values('is_consistent')
+    colors = ['#4dd0e1', '#e57373']  # 0: Inconsistent, 1: Consistent
+    bar = sns.barplot(x='is_consistent', y='change_ranking_binary', data=prop_change, 
+                palette=colors, errorbar=('ci', 95))
     # Overlay individual condition points
-    for i, group in enumerate([1, 0]):
-        y = df[df['is_consistent'] == group].groupby('condition')['change_ranking_binary'].mean()
-        plt.scatter([i]*len(y), y, color='k', label=None)
-    
+    for i, group in enumerate([0, 1]):
+        y_vals = df[df['is_consistent'] == group].groupby('condition')['change_ranking_binary'].mean()
+        plt.scatter([i]*len(y_vals), y_vals, color='k', label=None)
+    # Annotate means
+    for i, row in prop_change.iterrows():
+        plt.text(i, row['change_ranking_binary'] + 0.03, f"{row['change_ranking_binary']:.2f}", ha='center', fontsize=12)
     plt.title('Opinion Change by Consistency')
-    plt.xlabel('Consistent (1) vs Inconsistent (0)')
+    plt.xlabel('Consistency')
     plt.ylabel('Proportion Changed Opinion')
+    plt.xticks([0, 1], ['Inconsistent', 'Consistent'])
     plt.legend(['Individual Conditions'], loc='upper right')
+    plt.ylim(0, 1)
     plt.savefig('rq1_consistency_persuasion.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 def analyze_rq2(df):
     """
     RQ2: Credibility and trust mediation
-    Analysis: Ordinal regression + mediation analysis
+    Hypothesis: Credibility & trust mediate
+    Dependent Variable: Credibility tertile
+    Test: Ordinal regression + mediation analysis
     """
     print("\nResearch Question 2: Credibility and Trust Mediation")
     print("------------------------------------------------")
@@ -121,23 +131,32 @@ def analyze_rq2(df):
     # Create consistency variable
     df['is_consistent'] = df['condition'].isin(['male_male', 'female_female']).astype(int)
     
-    # Step 1: Consistency -> Credibility (a path)
+    # Step 1: Ordinal regression for credibility tertiles
+    credibility_model = sm.MNLogit(df['credibility_category'].cat.codes, 
+                                  sm.add_constant(df['is_consistent'])).fit()
+    print("\nOrdinal Regression Results (Credibility):")
+    print(credibility_model.summary().tables[1])
+    
+    # Step 2: Mediation analysis
+    # Path a: Consistency -> Credibility
     model_a = sm.OLS(df['credibility_score'], sm.add_constant(df['is_consistent'])).fit()
     a_coef = model_a.params['is_consistent']
     a_pval = model_a.pvalues['is_consistent']
     
-    # Step 2: Credibility -> Change_ranking (b path)
-    model_b = sm.Logit(df['change_ranking'], sm.add_constant(df['credibility_score'])).fit()
+    # Path b: Credibility -> Change_ranking
+    model_b = sm.Logit(df['change_ranking_binary'], 
+                      sm.add_constant(df['credibility_score'])).fit()
     b_coef = model_b.params['credibility_score']
     b_pval = model_b.pvalues['credibility_score']
     
-    # Step 3: Consistency -> Change_ranking (c path - total effect)
-    model_c = sm.Logit(df['change_ranking'], sm.add_constant(df['is_consistent'])).fit()
+    # Path c: Total effect
+    model_c = sm.Logit(df['change_ranking_binary'], 
+                      sm.add_constant(df['is_consistent'])).fit()
     c_coef = model_c.params['is_consistent']
     c_pval = model_c.pvalues['is_consistent']
     
-    # Step 4: Consistency + Credibility -> Change_ranking (c' path - direct effect)
-    model_cprime = sm.Logit(df['change_ranking'], 
+    # Path c': Direct effect
+    model_cprime = sm.Logit(df['change_ranking_binary'], 
                            sm.add_constant(pd.concat([df['is_consistent'], 
                                                     df['credibility_score']], axis=1))).fit()
     cprime_coef = model_cprime.params['is_consistent']
@@ -153,23 +172,6 @@ def analyze_rq2(df):
     print(f"Path c (Total Effect): β = {c_coef:.3f}, p = {c_pval:.3f}")
     print(f"Path c' (Direct Effect): β = {cprime_coef:.3f}, p = {cprime_pval:.3f}")
     print(f"Indirect Effect (a*b): {indirect_effect:.3f}")
-    
-    # Additional analysis with trust
-    print("\nTrust as Secondary Mediator:")
-    print("----------------------------")
-    
-    # Credibility -> Trust
-    model_d = sm.OLS(df['trust_score'], sm.add_constant(df['credibility_score'])).fit()
-    d_coef = model_d.params['credibility_score']
-    d_pval = model_d.pvalues['credibility_score']
-    
-    # Trust -> Change_ranking
-    model_e = sm.Logit(df['change_ranking'], sm.add_constant(df['trust_score'])).fit()
-    e_coef = model_e.params['trust_score']
-    e_pval = model_e.pvalues['trust_score']
-    
-    print(f"Credibility -> Trust: β = {d_coef:.3f}, p = {d_pval:.3f}")
-    print(f"Trust -> Change: β = {e_coef:.3f}, p = {e_pval:.3f}")
     
     # Visualize relationships
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -193,7 +195,9 @@ def analyze_rq2(df):
 def analyze_rq3(df):
     """
     RQ3: Inconsistency increases eeriness, decreases trust
-    Analysis: Interaction effects
+    Hypothesis: Inconsistency ↑ eeriness, ↓ trust
+    Dependent Variables: Eeriness, Trust
+    Test: Interaction analysis
     """
     print("\nResearch Question 3: Inconsistency, Eeriness, and Trust")
     print("-------------------------------------------------")
@@ -258,15 +262,21 @@ def plot_research_questions_summary(df):
 
     # Bar plot for proportion of opinion change
     prop_change = df.groupby('is_consistent')['change_ranking_binary'].mean().reset_index()
-    sns.barplot(x='is_consistent', y='change_ranking_binary', data=prop_change, ax=axes[0], palette=['#e57373', '#4dd0e1'])
+    prop_change = prop_change.sort_values('is_consistent')
+    colors = ['#4dd0e1', '#e57373']  # 0: Inconsistent, 1: Consistent
+    sns.barplot(x='is_consistent', y='change_ranking_binary', data=prop_change, ax=axes[0], palette=colors)
     # Overlay individual condition points
-    for i, group in enumerate([1, 0]):
-        y = df[df['is_consistent'] == group].groupby('condition')['change_ranking_binary'].mean()
-        axes[0].scatter([i]*len(y), y, color='k', label=None)
-    axes[0].set_xticklabels(['Consistent', 'Inconsistent'])
+    for i, group in enumerate([0, 1]):
+        y_vals = df[df['is_consistent'] == group].groupby('condition')['change_ranking_binary'].mean()
+        axes[0].scatter([i]*len(y_vals), y_vals, color='k', label=None)
+    # Annotate means
+    for i, row in prop_change.iterrows():
+        axes[0].text(i, row['change_ranking_binary'] + 0.03, f"{row['change_ranking_binary']:.2f}", ha='center', fontsize=12)
+    axes[0].set_xticklabels(['Inconsistent', 'Consistent'])
     axes[0].set_ylabel('Proportion of Opinion Change')
     axes[0].set_title('Opinion Change by Consistency Type')
     axes[0].legend(['Individual Conditions'], loc='upper right')
+    axes[0].set_ylim(0, 1)
 
     # --- Panel 2: Logistic Regression Probability Plot ---
     # Fit logistic regression
