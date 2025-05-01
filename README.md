@@ -52,8 +52,11 @@ The analysis addresses three main research questions:
 - 🔍 Analyzes the relationship between VA consistency and opinion change
 - ↔️ Compares consistent (male-male, female-female) vs. inconsistent conditions (male-female, female-male)
 - 📊 Key findings:
-  - 📈 Odds ratio: 2.15 for opinion change in consistent conditions
-  - ⚠️ Effect not statistically significant (p = 0.293)
+  - 📈 Mixed effects model with condition as random effect
+  - 📊 Fixed effect of consistency: β = 0.150 (SE = 0.250, p = 0.548)
+  - 📈 Odds ratio: 1.162 for opinion change in consistent conditions
+  - 🔄 Random effect variance: 0.044
+  - ⚠️ Effect not statistically significant at conventional levels
 
 ### 🔗 RQ2: Credibility & Trust Mediation
 - 🔍 Examines the mediating role of credibility in trust formation
@@ -75,15 +78,15 @@ The project employs various statistical and visualization techniques:
 
 1. **Statistical Analysis**
    - 📊 ANOVA tests for composite scores
-   - 📈 Logistic regression for opinion change
+   - 📈 Mixed logistic regression for opinion change (accounting for condition-level random effects)
    - 🔗 Mediation analysis
    - 📈 Correlation analysis
 
 2. **Visualization**
    - 📊 Bar charts for condition comparisons
    - 📦 Box plots for score distributions
-   - 📊 Error bar plots for mean comparisons
-   - 📊 Multi-panel summary plots
+   - 📊 Error bar plots for mean comparisons with confidence intervals
+   - 📊 Multi-panel summary plots with model predictions
 
 ## 📊 Results
 
