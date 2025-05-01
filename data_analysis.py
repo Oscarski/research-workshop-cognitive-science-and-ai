@@ -6,6 +6,7 @@ from scipy import stats
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.stats.mediation import Mediation
 import statsmodels.api as sm
+from statsmodels.regression.mixed_linear_model import MixedLM
 from data_cleaning import load_and_clean_data, check_data_quality, prepare_for_modeling
 from scipy.stats import pearsonr
 
@@ -82,17 +83,30 @@ def analyze_rq1(df):
     # Prepare data for mixed logistic regression
     X = sm.add_constant(df['is_consistent'])
     y = df['change_ranking_binary']
+    groups = pd.Categorical(df['condition']).codes  # Use condition as random effect
     
-    # Fit mixed logistic regression
-    model = sm.Logit(y, X)
-    results = model.fit()
-    
-    print("\nMixed Logistic Regression Results:")
-    print(results.summary().tables[1])
-    
-    # Calculate and print odds ratios
-    print("\nOdds Ratios:")
-    print(np.exp(results.params))
+    # Fit mixed logistic regression using MixedLM
+    model = MixedLM(y, X, groups=groups)
+    try:
+        results = model.fit()
+        
+        print("\nMixed Logistic Regression Results:")
+        print(results.summary().tables[1])
+        
+        # Calculate and print odds ratios
+        print("\nOdds Ratios:")
+        odds_ratios = np.exp(results.params)
+        print(odds_ratios)
+        
+        # Get predicted probabilities
+        pred_probs = 1 / (1 + np.exp(-results.predict()))
+        
+    except:
+        print("Warning: Mixed logistic regression did not converge. Falling back to standard logistic regression.")
+        # Fallback to standard logistic regression
+        model = sm.Logit(y, X)
+        results = model.fit()
+        pred_probs = results.predict()
     
     # Create visualization
     plt.figure(figsize=(8, 6))
@@ -100,20 +114,30 @@ def analyze_rq1(df):
     # Ensure correct order: 0 (Inconsistent), 1 (Consistent)
     prop_change = prop_change.sort_values('is_consistent')
     colors = ['#4dd0e1', '#e57373']  # 0: Inconsistent, 1: Consistent
+    
+    # Plot observed proportions
     bar = sns.barplot(x='is_consistent', y='change_ranking_binary', data=prop_change, 
-                palette=colors, errorbar=('ci', 95))
+                     palette=colors, errorbar=('ci', 95))
+    
     # Overlay individual condition points
     for i, group in enumerate([0, 1]):
         y_vals = df[df['is_consistent'] == group].groupby('condition')['change_ranking_binary'].mean()
         plt.scatter([i]*len(y_vals), y_vals, color='k', label=None)
+    
+    # Overlay predicted probabilities
+    mean_probs = [np.mean(pred_probs[df['is_consistent'] == i]) for i in [0, 1]]
+    plt.plot([-0.2, 0.2], [mean_probs[0], mean_probs[0]], 'r--', alpha=0.5)
+    plt.plot([0.8, 1.2], [mean_probs[1], mean_probs[1]], 'r--', alpha=0.5)
+    
     # Annotate means
     for i, row in prop_change.iterrows():
         plt.text(i, row['change_ranking_binary'] + 0.03, f"{row['change_ranking_binary']:.2f}", ha='center', fontsize=12)
-    plt.title('Opinion Change by Consistency')
+    
+    plt.title('Opinion Change by Consistency (Mixed Effects Model)')
     plt.xlabel('Consistency')
     plt.ylabel('Proportion Changed Opinion')
     plt.xticks([0, 1], ['Inconsistent', 'Consistent'])
-    plt.legend(['Individual Conditions'], loc='upper right')
+    plt.legend(['Individual Conditions', 'Model Predictions'], loc='upper right')
     plt.ylim(0, 1)
     plt.savefig('rq1_consistency_persuasion.png', dpi=300, bbox_inches='tight')
     plt.close()
@@ -278,23 +302,41 @@ def plot_research_questions_summary(df):
     axes[0].legend(['Individual Conditions'], loc='upper right')
     axes[0].set_ylim(0, 1)
 
-    # --- Panel 2: Logistic Regression Probability Plot ---
-    # Fit logistic regression
-    X = sm.add_constant(df['is_consistent'].astype(int))
-    y = df['change_ranking_binary'].astype(int)
-    model = sm.Logit(y, X).fit(disp=0)
-    pred_df = pd.DataFrame({'is_consistent': [0, 1]})
-    pred_X = sm.add_constant(pred_df)
-    pred_probs = model.predict(pred_X)
-    se = np.sqrt(np.diag(np.dot(pred_X, np.dot(model.cov_params(), pred_X.T))))
-    logit = model.predict(pred_X, linear=True)
-    lower = sm.families.links.logit().inverse(logit - 1.96 * se)
-    upper = sm.families.links.logit().inverse(logit + 1.96 * se)
-    axes[1].bar(['Inconsistent', 'Consistent'], pred_probs, color=['#4dd0e1', '#e57373'], alpha=0.7)
-    axes[1].errorbar(['Inconsistent', 'Consistent'], pred_probs, yerr=[pred_probs-lower, upper-pred_probs], fmt='none', color='k', capsize=8)
+    # --- Panel 2: Mixed Logistic Regression Probability Plot ---
+    # Fit mixed logistic regression
+    X = sm.add_constant(df['is_consistent'])
+    y = df['change_ranking_binary']
+    groups = pd.Categorical(df['condition']).codes  # Use condition as random effect
+    
+    try:
+        model = MixedLM(y, X, groups=groups)
+        results = model.fit()
+        pred_probs = 1 / (1 + np.exp(-results.predict()))
+    except:
+        print("Warning: Mixed logistic regression did not converge. Falling back to standard logistic regression.")
+        model = sm.Logit(y, X)
+        results = model.fit(disp=0)
+        pred_probs = results.predict()
+    
+    mean_probs = [np.mean(pred_probs[df['is_consistent'] == i]) for i in [0, 1]]
+    axes[1].bar(['Inconsistent', 'Consistent'], mean_probs, color=['#4dd0e1', '#e57373'], alpha=0.7)
+    
+    # Calculate confidence intervals
+    ci_lower = []
+    ci_upper = []
+    for i in [0, 1]:
+        group_probs = pred_probs[df['is_consistent'] == i]
+        ci = stats.t.interval(0.95, len(group_probs)-1, loc=np.mean(group_probs), scale=stats.sem(group_probs))
+        ci_lower.append(ci[0])
+        ci_upper.append(ci[1])
+    
+    axes[1].errorbar(['Inconsistent', 'Consistent'], mean_probs, 
+                    yerr=[np.array(mean_probs) - np.array(ci_lower), 
+                          np.array(ci_upper) - np.array(mean_probs)], 
+                    fmt='none', color='k', capsize=8)
     axes[1].set_ylim(0, 1)
     axes[1].set_ylabel('Predicted Probability')
-    axes[1].set_title('Logistic Regression: Probability of Opinion Change')
+    axes[1].set_title('Mixed Effects Model: Probability of Opinion Change')
 
     # --- Panel 3: Trust by Credibility Category ---
     trust_means = df.groupby('credibility_category')['trust_score'].mean()
