@@ -369,6 +369,57 @@ def plot_research_questions_summary(df):
     plt.savefig('research_questions_summary.png', dpi=300)
     plt.close()
 
+def plot_mediation_ordinal_regression(df):
+    """
+    Plot ordinal regression results for the mediation analysis between consistency,
+    trust/credibility, and persuasion.
+    """
+    # Create consistency variable
+    df['is_consistent'] = df['condition'].isin(['male_male', 'female_female']).astype(int)
+    
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Plot 1: Credibility by Consistency
+    sns.boxplot(x='is_consistent', y='credibility_score', data=df, ax=ax1, palette=['#4dd0e1', '#e57373'])
+    ax1.set_title('Credibility by Consistency')
+    ax1.set_xlabel('Consistent (1) vs Inconsistent (0)')
+    ax1.set_ylabel('Credibility Score')
+    
+    # Add regression line
+    x = df['is_consistent']
+    y = df['credibility_score']
+    z = np.polyfit(x, y, 1)
+    p = np.poly1d(z)
+    ax1.plot(x, p(x), "r--", alpha=0.8)
+    
+    # Calculate and display correlation
+    corr, p_val = pearsonr(x, y)
+    ax1.annotate(f'Correlation: {corr:.2f}\np-value: {p_val:.3f}', 
+                xy=(0.02, 0.95), xycoords='axes fraction')
+    
+    # Plot 2: Trust by Consistency
+    sns.boxplot(x='is_consistent', y='trust_score', data=df, ax=ax2, palette=['#4dd0e1', '#e57373'])
+    ax2.set_title('Trust by Consistency')
+    ax2.set_xlabel('Consistent (1) vs Inconsistent (0)')
+    ax2.set_ylabel('Trust Score')
+    
+    # Add regression line
+    x = df['is_consistent']
+    y = df['trust_score']
+    z = np.polyfit(x, y, 1)
+    p = np.poly1d(z)
+    ax2.plot(x, p(x), "r--", alpha=0.8)
+    
+    # Calculate and display correlation
+    corr, p_val = pearsonr(x, y)
+    ax2.annotate(f'Correlation: {corr:.2f}\np-value: {p_val:.3f}', 
+                xy=(0.02, 0.95), xycoords='axes fraction')
+    
+    plt.tight_layout()
+    plt.savefig('mediation_ordinal_regression.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
 def main():
     # Load and clean data
     df = load_and_clean_data()
@@ -382,6 +433,7 @@ def main():
     plot_composite_scores(df_final)
     plot_tertiles(df_final)
     plot_demographics(df_final)
+    plot_mediation_ordinal_regression(df_final)
     
     # Print summary statistics
     print("\nSummary Statistics:")

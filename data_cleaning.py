@@ -35,7 +35,9 @@ def load_and_clean_data():
     
     # Clean data
     raw_df.columns = raw_df.columns.str.strip()
-    raw_df['participant_id'] = raw_df['Response ID']
+    
+    # Create sequential participant IDs
+    raw_df['participant_id'] = range(1, len(raw_df) + 1)
     
     # Define necessary columns
     base_cols = ['participant_id', 'condition', 'What is your age?', 'What is your gender?',
