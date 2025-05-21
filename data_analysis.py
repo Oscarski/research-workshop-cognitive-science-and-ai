@@ -44,6 +44,91 @@ def plot_demographics(df):
     plt.savefig('demographics.png', dpi=300, bbox_inches='tight')
     plt.close()
 
+def plot_logistic_regression_table(results):
+    """Create a table visualization for logistic regression results."""
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(10, 4))
+    
+    # Hide axes
+    ax.axis('tight')
+    ax.axis('off')
+    
+    # Create table data
+    data = [
+        ['Variable', 'Coef.', 'Std. Err.', 'z', 'P>|z|', '[0.025', '0.975]', 'Odds Ratio'],
+        ['const', f'{results.params[0]:.3f}', f'{results.bse[0]:.3f}', 
+         f'{results.tvalues[0]:.3f}', f'{results.pvalues[0]:.3f}',
+         f'{results.conf_int()[0][0]:.3f}', f'{results.conf_int()[0][1]:.3f}',
+         f'{np.exp(results.params[0]):.2f}'],
+        ['is_consistent', f'{results.params[1]:.3f}', f'{results.bse[1]:.3f}',
+         f'{results.tvalues[1]:.3f}', f'{results.pvalues[1]:.3f}',
+         f'{results.conf_int()[1][0]:.3f}', f'{results.conf_int()[1][1]:.3f}',
+         f'{np.exp(results.params[1]):.2f}']
+    ]
+    
+    # Create table
+    table = ax.table(cellText=data,
+                    loc='center',
+                    cellLoc='center',
+                    colWidths=[0.15, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+    
+    # Style the table
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1.2, 1.5)
+    
+    # Style header row
+    for i in range(8):
+        table[(0, i)].set_facecolor('#40466e')
+        table[(0, i)].set_text_props(color='white', weight='bold')
+    
+    # Add title
+    plt.title('Table 2: Logistic Regression Results for RQ1\n(Predicting Opinion Change from Consistency)',
+              pad=20, fontsize=14)
+    
+    # Save figure
+    plt.savefig('logistic_regression_table.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_ordinal_regression_table(results):
+    """Create a table visualization for ordinal regression results."""
+    # Convert results to DataFrame for easier access
+    params = results.params
+    bse = results.bse
+    tvalues = results.tvalues
+    pvalues = results.pvalues
+    conf_int = results.conf_int()
+
+    # Prepare table data
+    data = [
+        ['Variable', 'Coef.', 'Std. Err.', 'z', 'P>|z|', '[0.025', '0.975]'],
+        ['const (y=1)', f'{params.iloc[0,0]:.3f}', f'{bse.iloc[0,0]:.3f}', f'{tvalues.iloc[0,0]:.3f}', f'{pvalues.iloc[0,0]:.3f}', f'{conf_int.iloc[0,0]:.3f}', f'{conf_int.iloc[0,1]:.3f}'],
+        ['is_consistent (y=1)', f'{params.iloc[0,1]:.3f}', f'{bse.iloc[0,1]:.3f}', f'{tvalues.iloc[0,1]:.3f}', f'{pvalues.iloc[0,1]:.3f}', f'{conf_int.iloc[0,1]:.3f}', f'{conf_int.iloc[1,1]:.3f}'],
+        ['const (y=2)', f'{params.iloc[1,0]:.3f}', f'{bse.iloc[1,0]:.3f}', f'{tvalues.iloc[1,0]:.3f}', f'{pvalues.iloc[1,0]:.3f}', f'{conf_int.iloc[1,0]:.3f}', f'{conf_int.iloc[1,1]:.3f}'],
+        ['is_consistent (y=2)', f'{params.iloc[1,1]:.3f}', f'{bse.iloc[1,1]:.3f}', f'{tvalues.iloc[1,1]:.3f}', f'{pvalues.iloc[1,1]:.3f}', f'{conf_int.iloc[1,1]:.3f}', f'{conf_int.iloc[1,1]:.3f}']
+    ]
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.axis('tight')
+    ax.axis('off')
+
+    # Create table
+    table = ax.table(cellText=data,
+                    loc='center',
+                    cellLoc='center',
+                    colWidths=[0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1.2, 1.5)
+    for i in range(7):
+        table[(0, i)].set_facecolor('#40466e')
+        table[(0, i)].set_text_props(color='white', weight='bold')
+    plt.title('Table 3: Ordinal Regression Results for RQ2\n(Credibility Categories by Consistency)',
+              pad=20, fontsize=14)
+    plt.savefig('ordinal_regression_table.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
 def analyze_rq1(df):
     """
     RQ1: Consistency increases persuasion
@@ -75,6 +160,9 @@ def analyze_rq1(df):
     print("\nOdds Ratios:")
     odds_ratios = np.exp(results.params)
     print(odds_ratios)
+    
+    # Create table visualization
+    plot_logistic_regression_table(results)
     
     # Get predicted probabilities
     pred_probs = results.predict()
@@ -131,6 +219,9 @@ def analyze_rq2(df):
                                   sm.add_constant(df['is_consistent'])).fit()
     print("\nOrdinal Regression Results (Credibility):")
     print(credibility_model.summary().tables[1])
+    
+    # Create table visualization
+    plot_ordinal_regression_table(credibility_model)
 
 def main():
     # Load and clean data
