@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
 import statsmodels.api as sm
+from statsmodels.miscmodels.ordinal_model import OrderedModel
 from data_cleaning import load_and_clean_data, check_data_quality, prepare_for_modeling
 
 # Set style
@@ -92,27 +93,39 @@ def plot_logistic_regression_table(results):
 
 def plot_ordinal_regression_table(results):
     """Create a table visualization for ordinal regression results."""
-    # Convert results to DataFrame for easier access
-    params = results.params
-    bse = results.bse
-    tvalues = results.tvalues
-    pvalues = results.pvalues
-    conf_int = results.conf_int()
-
-    # Prepare table data
-    data = [
-        ['Variable', 'Coef.', 'Std. Err.', 'z', 'P>|z|', '[0.025', '0.975]'],
-        ['const (y=1)', f'{params.iloc[0,0]:.3f}', f'{bse.iloc[0,0]:.3f}', f'{tvalues.iloc[0,0]:.3f}', f'{pvalues.iloc[0,0]:.3f}', f'{conf_int.iloc[0,0]:.3f}', f'{conf_int.iloc[0,1]:.3f}'],
-        ['is_consistent (y=1)', f'{params.iloc[0,1]:.3f}', f'{bse.iloc[0,1]:.3f}', f'{tvalues.iloc[0,1]:.3f}', f'{pvalues.iloc[0,1]:.3f}', f'{conf_int.iloc[0,1]:.3f}', f'{conf_int.iloc[1,1]:.3f}'],
-        ['const (y=2)', f'{params.iloc[1,0]:.3f}', f'{bse.iloc[1,0]:.3f}', f'{tvalues.iloc[1,0]:.3f}', f'{pvalues.iloc[1,0]:.3f}', f'{conf_int.iloc[1,0]:.3f}', f'{conf_int.iloc[1,1]:.3f}'],
-        ['is_consistent (y=2)', f'{params.iloc[1,1]:.3f}', f'{bse.iloc[1,1]:.3f}', f'{tvalues.iloc[1,1]:.3f}', f'{pvalues.iloc[1,1]:.3f}', f'{conf_int.iloc[1,1]:.3f}', f'{conf_int.iloc[1,1]:.3f}']
-    ]
-
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.axis('tight')
     ax.axis('off')
-
+    
+    # Get parameter names and values
+    params = results.params
+    bse = results.bse
+    
+    # Calculate z-values and p-values
+    zvalues = params / bse
+    pvalues = 2 * (1 - stats.norm.cdf(abs(zvalues)))
+    conf_int = results.conf_int()
+    
+    # Create table data
+    data = [['Variable', 'Coef.', 'Std. Err.', 'z', 'P>|z|', '[0.025', '0.975]']]
+    
+    # Add rows for each parameter
+    for i, p_name in enumerate(params.index):
+        param_name = p_name
+        if p_name == '0/1' or p_name == '1/2':
+            param_name = f'cut_{p_name}'  # More descriptive name for cut points
+            
+        data.append([
+            param_name,
+            f'{params.iloc[i]:.3f}',
+            f'{bse.iloc[i]:.3f}',
+            f'{zvalues.iloc[i]:.3f}',
+            f'{pvalues[i]:.3f}',
+            f'{conf_int.iloc[i, 0]:.3f}',
+            f'{conf_int.iloc[i, 1]:.3f}'
+        ])
+    
     # Create table
     table = ax.table(cellText=data,
                     loc='center',
@@ -214,14 +227,21 @@ def analyze_rq2(df):
     # Create consistency variable
     df['is_consistent'] = df['condition'].isin(['male_male', 'female_female']).astype(int)
     
-    # Step 1: Ordinal regression for credibility tertiles
-    credibility_model = sm.MNLogit(df['credibility_category'].cat.codes, 
-                                  sm.add_constant(df['is_consistent'])).fit()
+    # Convert categorical codes to numeric values (0=low, 1=medium, 2=high)
+    credibility_numeric = df['credibility_category'].cat.codes
+    
+    # Prepare exogenous variables - OrderedModel adds constant internally
+    exog = df[['is_consistent']]
+    
+    # Fit ordinal regression model
+    model = OrderedModel(credibility_numeric, exog, distr='logit')
+    results = model.fit(method='bfgs', disp=False)
+    
     print("\nOrdinal Regression Results (Credibility):")
-    print(credibility_model.summary().tables[1])
+    print(results.summary())
     
     # Create table visualization
-    plot_ordinal_regression_table(credibility_model)
+    plot_ordinal_regression_table(results)
 
 def main():
     # Load and clean data
