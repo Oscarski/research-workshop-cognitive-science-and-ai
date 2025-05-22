@@ -83,6 +83,10 @@ def plot_logistic_regression_table(results):
         table[(0, i)].set_facecolor('#40466e')
         table[(0, i)].set_text_props(color='white', weight='bold')
     
+    # Style header row
+    for i in range(8):
+        table[(1, i)].set_facecolor('#f2f2cb')
+    
     # Add title
     plt.title('Table 2: Logistic Regression Results for RQ1\n(Predicting Opinion Change from Consistency)',
               pad=20, fontsize=14)
@@ -92,9 +96,9 @@ def plot_logistic_regression_table(results):
     plt.close()
 
 def plot_ordinal_regression_table(results):
-    """Create a table visualization for ordinal regression results."""
+    """Create a simplified table visualization for ordinal regression results."""
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(10, 5))
     ax.axis('tight')
     ax.axis('off')
     
@@ -105,40 +109,42 @@ def plot_ordinal_regression_table(results):
     # Calculate z-values and p-values
     zvalues = params / bse
     pvalues = 2 * (1 - stats.norm.cdf(abs(zvalues)))
-    conf_int = results.conf_int()
     
-    # Create table data
-    data = [['Variable', 'Coef.', 'Std. Err.', 'z', 'P>|z|', '[0.025', '0.975]']]
-    
-    # Add rows for each parameter
-    for i, p_name in enumerate(params.index):
-        param_name = p_name
-        if p_name == '0/1' or p_name == '1/2':
-            param_name = f'cut_{p_name}'  # More descriptive name for cut points
-            
-        data.append([
-            param_name,
-            f'{params.iloc[i]:.3f}',
-            f'{bse.iloc[i]:.3f}',
-            f'{zvalues.iloc[i]:.3f}',
-            f'{pvalues[i]:.3f}',
-            f'{conf_int.iloc[i, 0]:.3f}',
-            f'{conf_int.iloc[i, 1]:.3f}'
-        ])
+    # Create simplified table data
+    data = [
+        ['Parameter', 'Coefficient', 'Std. Error', 'z-value', 'p-value'],
+        ['Consistency', f'{params.iloc[0]:.3f}', f'{bse.iloc[0]:.3f}', f'{zvalues.iloc[0]:.3f}', f'{pvalues[0]:.3f}'],
+        ['Cut: Low-Medium', f'{params.iloc[1]:.3f}', f'{bse.iloc[1]:.3f}', f'{zvalues.iloc[1]:.3f}', f'{pvalues[1]:.3f}'],
+        ['Cut: Medium-High', f'{params.iloc[2]:.3f}', f'{bse.iloc[2]:.3f}', f'{zvalues.iloc[2]:.3f}', f'{pvalues[2]:.3f}']
+    ]
     
     # Create table
-    table = ax.table(cellText=data,
-                    loc='center',
-                    cellLoc='center',
-                    colWidths=[0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+    table = ax.table(
+        cellText=data,
+        loc='center',
+        cellLoc='center',
+        colWidths=[0.25, 0.2, 0.2, 0.2, 0.2]
+    )
+    
+    # Style the table
     table.auto_set_font_size(False)
     table.set_fontsize(12)
-    table.scale(1.2, 1.5)
-    for i in range(7):
-        table[(0, i)].set_facecolor('#40466e')
+    table.scale(1.2, 1.8)
+    
+    # Style header row
+    for i in range(5):
+        table[(0, i)].set_facecolor('#3a75a8')
         table[(0, i)].set_text_props(color='white', weight='bold')
-    plt.title('Table 3: Ordinal Regression Results for RQ2\n(Credibility Categories by Consistency)',
-              pad=20, fontsize=14)
+    
+    # Highlight important value (consistency p-value)
+    table[(1, 0)].set_facecolor('#e6f2ff')
+    table[(1, 4)].set_facecolor('#e6f2ff')
+    
+    # Title
+    plt.title('Ordinal Regression: Effect of Consistency on Credibility Categories', 
+              fontsize=14, pad=20)
+    
+    plt.tight_layout()
     plt.savefig('ordinal_regression_table.png', dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -177,40 +183,47 @@ def analyze_rq1(df):
     # Create table visualization
     plot_logistic_regression_table(results)
     
-    # Get predicted probabilities
-    pred_probs = results.predict()
-    
-    # Create visualization
+    # Create simplified visualization for opinion change by consistency
     plt.figure(figsize=(8, 6))
-    prop_change = df.groupby('is_consistent')['change_ranking_binary'].mean().reset_index()
-    # Ensure correct order: 0 (Inconsistent), 1 (Consistent)
-    prop_change = prop_change.sort_values('is_consistent')
-    colors = ['#4dd0e1', '#e57373']  # 0: Inconsistent, 1: Consistent
     
-    # Plot observed proportions
-    bar = sns.barplot(x='is_consistent', y='change_ranking_binary', data=prop_change, 
-                     palette=colors, errorbar=('ci', 95))
+    # Prepare data for plotting
+    condition_labels = ['Inconsistent', 'Consistent']
+    conditions = [0, 1]
     
-    # Overlay individual condition points
-    for i, group in enumerate([0, 1]):
-        y_vals = df[df['is_consistent'] == group].groupby('condition')['change_ranking_binary'].mean()
-        plt.scatter([i]*len(y_vals), y_vals, color='k', label=None)
+    # Calculate proportion who changed opinion in each condition
+    change_props = [
+        df[df['is_consistent'] == 0]['change_ranking_binary'].mean(),
+        df[df['is_consistent'] == 1]['change_ranking_binary'].mean()
+    ]
     
-    # Overlay predicted probabilities
-    mean_probs = [np.mean(pred_probs[df['is_consistent'] == i]) for i in [0, 1]]
-    plt.plot([-0.2, 0.2], [mean_probs[0], mean_probs[0]], 'r--', alpha=0.5)
-    plt.plot([0.8, 1.2], [mean_probs[1], mean_probs[1]], 'r--', alpha=0.5)
+    # Bar colors
+    colors = ['#5DA5DA', '#FAA43A']
     
-    # Annotate means
-    for i, row in prop_change.iterrows():
-        plt.text(i, row['change_ranking_binary'] + 0.03, f"{row['change_ranking_binary']:.2f}", ha='center', fontsize=12)
+    # Create simplified bar chart
+    plt.bar(conditions, change_props, color=colors, width=0.6)
     
-    plt.title('Opinion Change by Consistency (Logistic Regression)')
-    plt.xlabel('Consistency')
-    plt.ylabel('Proportion Changed Opinion')
-    plt.xticks([0, 1], ['Inconsistent', 'Consistent'])
-    plt.legend(['Individual Conditions', 'Model Predictions'], loc='upper right')
-    plt.ylim(0, 1)
+    # Add data labels on top of bars
+    for i, prop in enumerate(change_props):
+        plt.text(i, prop + 0.02, f'{prop:.2f}', ha='center', fontsize=14, fontweight='bold')
+    
+    # Add labels and title
+    plt.title('Opinion Change by Consistency', fontsize=16)
+    plt.ylabel('Proportion Changed Opinion', fontsize=14)
+    plt.xticks(conditions, condition_labels, fontsize=14)
+    plt.ylim(0, 0.7)  # Set y-axis limit with some padding
+    
+    # Add a horizontal line for the overall average
+    overall_mean = df['change_ranking_binary'].mean()
+    plt.axhline(y=overall_mean, color='gray', linestyle='--', alpha=0.7)
+    plt.text(0.5, overall_mean + 0.02, f'Overall: {overall_mean:.2f}', 
+             ha='center', color='gray', fontsize=12)
+    
+    # Add odds ratio information
+    plt.figtext(0.5, 0.01, 
+                f'Odds Ratio: {odds_ratios[1]:.2f} (p = {results.pvalues[1]:.3f})', 
+                ha='center', fontsize=12)
+    
+    plt.tight_layout()
     plt.savefig('rq1_consistency_persuasion.png', dpi=300, bbox_inches='tight')
     plt.close()
 
